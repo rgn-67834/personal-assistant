@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Assistant</title>
+    <!-- marked.js renders markdown (tables, bold, etc.) in the browser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            background: #f4f4f4;
+            color: #1a1a1a;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Header ── */
+        header {
+            background: #A31F34;
+            color: white;
+            padding: 0 32px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .app-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: white;
+            letter-spacing: 0.03em;
+        }
+
+        .header-tag {
+            font-size: 0.75rem;
+            background: rgba(255,255,255,0.15);
+            color: rgba(255,255,255,0.85);
+            padding: 4px 10px;
+            border-radius: 12px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        /* ── Main layout ── */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 860px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px 24px 0;
+            overflow: hidden;
+        }
+
+        /* ── Chat window ── */
+        #chat-window {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding-bottom: 16px;
+        }
+
+        /* Empty state */
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #888;
+            gap: 12px;
+            padding: 40px;
+        }
+
+        .empty-state .icon {
+            font-size: 2.5rem;
+        }
+
+        .empty-state p {
+            font-size: 1rem;
+            text-align: center;
+            max-width: 380px;
+            line-height: 1.6;
+        }
+
+        .suggestion-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 8px;
+        }
+
+        .chip {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 0.85rem;
+            color: #A31F34;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .chip:hover {
+            background: #A31F34;
+            color: white;
+            border-color: #A31F34;
+        }
+
+        /* Messages */
+        .message-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .message-row.user {
+            flex-direction: row-reverse;
+        }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .avatar.user {
+            background: #A31F34;
+            color: white;
+        }
+
+        .avatar.assistant {
+            background: #1a1a1a;
+            color: white;
+        }
+
+        .bubble {
+            max-width: 72%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            line-height: 1.65;
+            white-space: pre-wrap;
+        }
+
+        .bubble.user {
+            background: #A31F34;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .bubble.assistant {
+            background: white;
+            color: #1a1a1a;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+
+        /* Markdown table styling */
+        .bubble.assistant table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+            font-size: 0.88rem;
+        }
+
+        .bubble.assistant th {
+            background: #A31F34;
+            color: white;
+            padding: 8px 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .bubble.assistant td {
+            padding: 7px 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .bubble.assistant tr:nth-child(even) td {
+            background: #f9f9f9;
+        }
+
+        .bubble.assistant tr:hover td {
+            background: #fff3f4;
+        }
+
+        /* Other markdown elements */
+        .bubble.assistant p { margin-bottom: 8px; }
+        .bubble.assistant p:last-child { margin-bottom: 0; }
+        .bubble.assistant strong { color: #A31F34; }
+        .bubble.assistant ul, .bubble.assistant ol {
+            padding-left: 20px;
+            margin-bottom: 8px;
+        }
+        .bubble.assistant li { margin-bottom: 4px; }
+        .bubble.assistant h1, .bubble.assistant h2, .bubble.assistant h3 {
+            margin: 10px 0 6px;
+            color: #1a1a1a;
+        }
+
+        .bubble.thinking {
+            background: transparent;
+            color: #999;
+            font-style: italic;
+            font-size: 0.88rem;
+            box-shadow: none;
+            padding-left: 0;
+        }
+
+        /* ── Input area ── */
+        .input-wrapper {
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            width: 100%;
+            flex-shrink: 0;
+        }
+
+        .input-area {
+            max-width: 860px;
+            margin: 0 auto;
+            padding: 16px 24px 20px;
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        #user-input {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1.5px solid #ddd;
+            font-size: 0.95rem;
+            outline: none;
+            resize: none;
+            font-family: inherit;
+            line-height: 1.5;
+            max-height: 120px;
+            transition: border-color 0.15s;
+        }
+
+        #user-input:focus {
+            border-color: #A31F34;
+        }
+
+        #send-btn {
+            padding: 12px 22px;
+            background: #A31F34;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.15s;
+            height: 46px;
+            white-space: nowrap;
+        }
+
+        #send-btn:hover { background: #8a1a2c; }
+        #send-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* Scrollbar */
+        #chat-window::-webkit-scrollbar { width: 6px; }
+        #chat-window::-webkit-scrollbar-track { background: transparent; }
+        #chat-window::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-left">
+            <span class="app-title">Personal Assistant</span>
+        </div>
+        <span class="header-tag">Private</span>
+    </header>
+
+    <div class="main">
+        <div id="chat-window">
+            <div class="empty-state" id="empty-state">
+                <p>Your personal assistant is ready. Ask me anything — I can help with analysis, finance, and more.</p>
+                <div class="suggestion-chips">
+                    <span class="chip" onclick="fillInput('What is CAGR and how do I calculate it?')">What is CAGR?</span>
+                    <span class="chip" onclick="fillInput('Get the income statement for AAPL and save to CSV')">AAPL income statement</span>
+                    <span class="chip" onclick="fillInput('What can you help me with?')">What can you do?</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="input-wrapper">
+        <div class="input-area">
+            <textarea id="user-input" placeholder="Ask me anything..." rows="1"></textarea>
+            <button id="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const chatWindow = document.getElementById("chat-window");
+        const userInput = document.getElementById("user-input");
+        const sendBtn = document.getElementById("send-btn");
+        const emptyState = document.getElementById("empty-state");
+
+        // Auto-resize textarea as user types
+        userInput.addEventListener("input", () => {
+            userInput.style.height = "auto";
+            userInput.style.height = userInput.scrollHeight + "px";
+        });
+
+        // Send on Enter, new line on Shift+Enter
+        userInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function fillInput(text) {
+            userInput.value = text;
+            userInput.focus();
+        }
+
+        function addMessage(text, role) {
+            if (emptyState) emptyState.remove();
+
+            const row = document.createElement("div");
+            row.className = `message-row ${role}`;
+
+            if (role !== "thinking") {
+                const avatar = document.createElement("div");
+                avatar.className = `avatar ${role}`;
+                avatar.textContent = role === "user" ? "You" : "AI";
+                row.appendChild(avatar);
+            }
+
+            const bubble = document.createElement("div");
+            bubble.className = `bubble ${role}`;
+
+            // Render markdown for assistant messages, plain text for user/thinking
+            if (role === "assistant") {
+                bubble.innerHTML = marked.parse(text);
+            } else {
+                bubble.textContent = text;
+            }
+
+            row.appendChild(bubble);
+            chatWindow.appendChild(row);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            return bubble;
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            userInput.value = "";
+            userInput.style.height = "auto";
+            sendBtn.disabled = true;
+
+            addMessage(text, "user");
+            const thinkingRow = document.createElement("div");
+            thinkingRow.className = "message-row assistant";
+            const thinkingBubble = document.createElement("div");
+            thinkingBubble.className = "bubble thinking";
+            thinkingBubble.textContent = "Thinking...";
+            thinkingRow.appendChild(thinkingBubble);
+            chatWindow.appendChild(thinkingRow);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+
+            try {
+                const res = await fetch("/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: text })
+                });
+
+                const data = await res.json();
+                thinkingRow.remove();
+                addMessage(data.response, "assistant");
+            } catch (err) {
+                thinkingRow.remove();
+                addMessage("Error: could not reach the server.", "thinking");
+            }
+
+            sendBtn.disabled = false;
+            userInput.focus();
+        }
+    </script>
+</body>
+</html>
