@@ -351,6 +351,29 @@
         #chat-window::-webkit-scrollbar { width: 6px; }
         #chat-window::-webkit-scrollbar-track { background: transparent; }
         #chat-window::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
+        /* Rendered markdown has its own block spacing, and wide tables scroll
+           inside the bubble instead of pushing the page sideways */
+        .bubble { min-width: 0; overflow-wrap: anywhere; }
+        .bubble.assistant { white-space: normal; }
+        .bubble.assistant table { display: block; overflow-x: auto; white-space: nowrap; }
+
+        /* ── Phones ── */
+        @media (max-width: 640px) {
+            body { height: 100dvh; }
+            header { padding: 0 16px; height: 52px; }
+            .header-tag { font-size: 0.65rem; padding: 3px 8px; }
+            .key-bar { padding: 8px 12px; gap: 8px; font-size: 0.8rem; }
+            #key-input { width: 100%; }
+            .main { padding: 12px 12px 0; }
+            .empty-state { padding: 16px; }
+            .message-row { gap: 8px; }
+            .avatar { width: 26px; height: 26px; font-size: 0.65rem; }
+            .bubble { max-width: calc(100% - 34px); padding: 10px 12px; font-size: 0.92rem; }
+            .bubble.assistant th, .bubble.assistant td { padding: 6px 8px; }
+            .input-area { padding: 10px 12px; }
+            /* 16px stops iOS Safari from zooming the page when a field is focused */
+            #user-input, #key-input { font-size: 16px; }
+        }
     </style>
 </head>
 <body>
