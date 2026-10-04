@@ -6,7 +6,7 @@ from agents.lawyer import run_lawyer_agent
 
 load_dotenv()
 
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+from agents.client import get_client
 
 SYSTEM_PROMPT = """You are a personal assistant with access to two specialized agents:
 a finance agent and a lawyer/patent agent.
@@ -51,7 +51,7 @@ def run_orchestrator(user_message: str) -> str:
     messages = [{"role": "user", "content": user_message}]
 
     while True:
-        response = client.messages.create(
+        response = get_client().messages.create(
             model="claude-opus-4-6",
             max_tokens=4096,
             system=SYSTEM_PROMPT,

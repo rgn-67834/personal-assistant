@@ -6,13 +6,13 @@ from dotenv import load_dotenv
 os.environ["PYTHONIOENCODING"] = "utf-8"
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
-from fastapi import FastAPI, Request, Depends, HTTPException
-from fastapi.responses import HTMLResponse
+import anthropic
+from fastapi import FastAPI, Header
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
-import secrets
 
+from agents.client import use_api_key
 from agents.orchestrator import run_orchestrator
 
 load_dotenv()
@@ -21,22 +21,6 @@ app = FastAPI()
 
 # Serve the static folder so FastAPI can send your HTML page to the browser
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# --- Simple password protection ---
-# This is how you keep the page private. Only someone with the right
-# username and password can access it.
-security = HTTPBasic()
-
-VALID_USERNAME = "admin"
-VALID_PASSWORD = "changeme"  # Change this to something strong
-
-def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
-    # secrets.compare_digest is used instead of == to prevent timing attacks
-    valid_user = secrets.compare_digest(credentials.username, VALID_USERNAME)
-    valid_pass = secrets.compare_digest(credentials.password, VALID_PASSWORD)
-    if not (valid_user and valid_pass):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    return credentials
 
 
 # --- Request/response models ---
@@ -53,17 +37,28 @@ class ChatResponse(BaseModel):
 # A "route" is a URL path that FastAPI listens on.
 
 @app.get("/", response_class=HTMLResponse)
-def serve_homepage(credentials: HTTPBasicCredentials = Depends(require_auth)):
+def serve_homepage():
     # When you visit the root URL, serve the HTML page
-    with open("static/index.html") as f:
+    with open("static/index.html", encoding="utf-8") as f:
         return f.read()
 
+# --- Bring your own key ---
+# The page is open to anyone, but every chat request must carry the visitor's
+# own Anthropic API key in the X-Anthropic-Key header. The key is used for that
+# one request and is never stored or logged. There is deliberately no fallback
+# to a server-side key, so a deployment can never spend the owner's credits.
 @app.post("/chat")
-def chat(request: ChatRequest, credentials: HTTPBasicCredentials = Depends(require_auth)):
+def chat(request: ChatRequest, x_anthropic_key: str | None = Header(default=None)):
+    api_key = (x_anthropic_key or "").strip()
+    if not api_key:
+        return JSONResponse(status_code=401, content={"response": "Add your Anthropic API key to start."})
     try:
-        response = run_orchestrator(request.message)
+        with use_api_key(api_key):
+            response = run_orchestrator(request.message)
         # Encode to UTF-8 and back to strip any characters Windows can't handle
         response = response.encode("utf-8", errors="replace").decode("utf-8")
         return ChatResponse(response=response)
+    except anthropic.AuthenticationError:
+        return JSONResponse(status_code=401, content={"response": "That API key was rejected by Anthropic. Check it and try again."})
     except Exception as e:
         return ChatResponse(response=f"Error: {str(e)}")

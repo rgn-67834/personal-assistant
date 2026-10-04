@@ -283,6 +283,48 @@
         #send-btn:hover { background: #8a1a2c; }
         #send-btn:disabled { background: #ccc; cursor: not-allowed; }
 
+        /* ── API key bar ── */
+        .key-bar {
+            background: #fff8e6;
+            border-bottom: 1px solid #f0e0b0;
+            padding: 10px 24px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            font-size: 0.85rem;
+            color: #555;
+            flex-shrink: 0;
+        }
+
+        .key-bar.saved { background: #f3f8f3; border-bottom-color: #d5e6d5; }
+        .key-bar a { color: #A31F34; }
+
+        #key-input {
+            padding: 7px 10px;
+            border-radius: 6px;
+            border: 1.5px solid #ddd;
+            font-size: 0.85rem;
+            width: 280px;
+            max-width: 100%;
+            outline: none;
+        }
+
+        #key-input:focus { border-color: #A31F34; }
+
+        .key-btn {
+            padding: 7px 14px;
+            background: #A31F34;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .key-btn.secondary { background: transparent; color: #A31F34; border: 1px solid #A31F34; }
+
         /* Scrollbar */
         #chat-window::-webkit-scrollbar { width: 6px; }
         #chat-window::-webkit-scrollbar-track { background: transparent; }
@@ -295,8 +337,15 @@
         <div class="header-left">
             <span class="app-title">Personal Assistant</span>
         </div>
-        <span class="header-tag">Private</span>
+        <span class="header-tag">Bring your own key</span>
     </header>
+
+    <div class="key-bar" id="key-bar">
+        <span id="key-status"></span>
+        <input type="password" id="key-input" placeholder="sk-ant-..." autocomplete="off" spellcheck="false">
+        <button class="key-btn" id="key-save" onclick="saveKey()">Use this key</button>
+        <button class="key-btn secondary" id="key-clear" onclick="clearKey()">Remove key</button>
+    </div>
 
     <div class="main">
         <div id="chat-window">
@@ -323,6 +372,51 @@
         const userInput = document.getElementById("user-input");
         const sendBtn = document.getElementById("send-btn");
         const emptyState = document.getElementById("empty-state");
+
+        // --- Bring your own key ---
+        // The key stays in this browser tab (sessionStorage is wiped when the tab
+        // closes) and is sent with each request. The server never stores it.
+        const keyBar = document.getElementById("key-bar");
+        const keyInput = document.getElementById("key-input");
+        const keyStatus = document.getElementById("key-status");
+        const keySave = document.getElementById("key-save");
+        const keyClear = document.getElementById("key-clear");
+
+        function getKey() {
+            try { return sessionStorage.getItem("anthropicKey") || ""; } catch (e) { return ""; }
+        }
+
+        function renderKeyBar() {
+            const hasKey = !!getKey();
+            keyBar.classList.toggle("saved", hasKey);
+            keyInput.style.display = hasKey ? "none" : "";
+            keySave.style.display = hasKey ? "none" : "";
+            keyClear.style.display = hasKey ? "" : "none";
+            keyStatus.innerHTML = hasKey
+                ? "Using your Anthropic API key for this tab. Usage is billed to your account."
+                : 'Paste your own <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Anthropic API key</a> to start. It stays in this tab and is never stored on the server.';
+        }
+
+        function saveKey() {
+            const key = keyInput.value.trim();
+            if (!key) return;
+            try { sessionStorage.setItem("anthropicKey", key); } catch (e) {}
+            keyInput.value = "";
+            renderKeyBar();
+            userInput.focus();
+        }
+
+        function clearKey() {
+            try { sessionStorage.removeItem("anthropicKey"); } catch (e) {}
+            renderKeyBar();
+            keyInput.focus();
+        }
+
+        keyInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") saveKey();
+        });
+
+        renderKeyBar();
 
         // Auto-resize textarea as user types
         userInput.addEventListener("input", () => {
@@ -376,6 +470,12 @@
             const text = userInput.value.trim();
             if (!text) return;
 
+            const apiKey = getKey();
+            if (!apiKey) {
+                keyInput.focus();
+                return;
+            }
+
             userInput.value = "";
             userInput.style.height = "auto";
             sendBtn.disabled = true;
@@ -393,12 +493,14 @@
             try {
                 const res = await fetch("/chat", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: { "Content-Type": "application/json", "X-Anthropic-Key": apiKey },
                     body: JSON.stringify({ message: text })
                 });
 
                 const data = await res.json();
                 thinkingRow.remove();
+                // 401 means the key is missing or was rejected, so ask for it again
+                if (res.status === 401) clearKey();
                 addMessage(data.response, "assistant");
             } catch (err) {
                 thinkingRow.remove();
