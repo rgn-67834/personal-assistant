@@ -11,12 +11,16 @@ _client: ContextVar[anthropic.Anthropic | None] = ContextVar("anthropic_client",
 
 
 @contextmanager
-def use_api_key(api_key: str):
-    token = _client.set(anthropic.Anthropic(api_key=api_key))
+def use_client(client):
+    token = _client.set(client)
     try:
         yield
     finally:
         _client.reset(token)
+
+
+def use_api_key(api_key: str):
+    return use_client(anthropic.Anthropic(api_key=api_key))
 
 
 def get_client() -> anthropic.Anthropic:

@@ -1,14 +1,13 @@
 import os
 import math
 from dotenv import load_dotenv
-import anthropic
 import yfinance as yf
 import pandas as pd
 import numpy as np
 
 load_dotenv()
 
-from agents.client import get_client
+from agents.loop import run_agent
 
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -785,32 +784,12 @@ def execute_tool(tool_name, tool_input):
 
 
 def run_finance_agent(user_request: str) -> str:
-    messages = [{"role": "user", "content": user_request}]
-
-    while True:
-        response = get_client().messages.create(
-            model="claude-opus-4-6",
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            tools=tools,
-            messages=messages
-        )
-
-        if response.stop_reason == "end_turn":
-            for block in response.content:
-                if block.type == "text":
-                    return block.text
-            return "No response generated."
-
-        if response.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": response.content})
-            tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    result = execute_tool(block.name, block.input)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": result
-                    })
-            messages.append({"role": "user", "content": tool_results})
+    # The specialist starts from a blank conversation: it sees only the request
+    # the orchestrator wrote for it, never the user's chat history.
+    return run_agent(
+        name="finance",
+        system=SYSTEM_PROMPT,
+        tools=tools,
+        execute_tool=execute_tool,
+        messages=[{"role": "user", "content": user_request}],
+    )

@@ -2,11 +2,10 @@ import os
 import csv
 import requests
 from dotenv import load_dotenv
-import anthropic
 
 load_dotenv()
 
-from agents.client import get_client
+from agents.loop import run_agent
 
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -496,31 +495,18 @@ TOOL_DISPATCH = {
 # ---------------------------------------------------------------------------
 # Agent runner
 # ---------------------------------------------------------------------------
+def execute_tool(tool_name, tool_input):
+    handler = TOOL_DISPATCH.get(tool_name)
+    return handler(tool_input) if handler else f"Unknown tool: {tool_name}"
+
+
 def run_lawyer_agent(user_message: str) -> str:
-    messages = [{"role": "user", "content": user_message}]
-    while True:
-        response = get_client().messages.create(
-            model="claude-opus-4-6",
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            tools=tools,
-            messages=messages
-        )
-        if response.stop_reason == "end_turn":
-            for block in response.content:
-                if block.type == "text":
-                    return block.text
-            return "No response generated."
-        if response.stop_reason == "tool_use":
-            messages.append({"role": "assistant", "content": response.content})
-            tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    handler = TOOL_DISPATCH.get(block.name)
-                    result = handler(block.input) if handler else f"Unknown tool: {block.name}"
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": result
-                    })
-            messages.append({"role": "user", "content": tool_results})
+    # Like the finance agent, this starts from a blank conversation and sees
+    # only the request the orchestrator wrote for it.
+    return run_agent(
+        name="lawyer",
+        system=SYSTEM_PROMPT,
+        tools=tools,
+        execute_tool=execute_tool,
+        messages=[{"role": "user", "content": user_message}],
+    )

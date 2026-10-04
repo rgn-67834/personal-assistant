@@ -222,6 +222,28 @@
             color: #1a1a1a;
         }
 
+        .trace {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .trace summary { cursor: pointer; user-select: none; }
+        .bubble.assistant .trace ol {
+            list-style: none;
+            margin: 8px 0 0;
+            padding: 0;
+            border-left: 2px solid #e5e7eb;
+        }
+        .bubble.assistant .trace li { padding: 2px 0 2px 10px; margin: 0; }
+        .bubble.assistant .trace li.nested { margin-left: 18px; }
+        .bubble.assistant .trace li.error { color: #b91c1c; }
+        .trace .agent { font-weight: 600; color: #374151; }
+        .trace code {
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 11px;
+            word-break: break-word;
+        }
+
         .bubble.thinking {
             background: transparent;
             color: #999;
@@ -352,8 +374,8 @@
             <div class="empty-state" id="empty-state">
                 <p>Your personal assistant is ready. Ask me anything — I can help with analysis, finance, and more.</p>
                 <div class="suggestion-chips">
-                    <span class="chip" onclick="fillInput('What is CAGR and how do I calculate it?')">What is CAGR?</span>
-                    <span class="chip" onclick="fillInput('Get the income statement for AAPL and save to CSV')">AAPL income statement</span>
+                    <span class="chip" onclick="fillInput('Compare the beta and Sharpe ratio of AAPL and MSFT over the last 3 years')">Compare AAPL and MSFT risk</span>
+                    <span class="chip" onclick="fillInput('Find recent Tesla patents on battery thermal management')">Tesla battery patents</span>
                     <span class="chip" onclick="fillInput('What can you help me with?')">What can you do?</span>
                 </div>
             </div>
@@ -432,6 +454,55 @@
             }
         });
 
+        // --- Conversation memory ---
+        // The server is stateless, so the chat history lives here in the page
+        // and is sent with every message. Only the orchestrator sees it.
+        const history = [];
+
+        // --- Agent trace ---
+        // Renders the steps the agents took: which agent ran, which tools it
+        // called with what input, and how many tokens the run used.
+        function renderTrace(trace) {
+            const toolCalls = trace.filter((e) => e.type === "tool_call");
+            const modelCalls = trace.filter((e) => e.type === "model_call");
+            if (!modelCalls.length) return null;
+
+            const tokensIn = modelCalls.reduce((n, e) => n + e.input_tokens, 0);
+            const tokensOut = modelCalls.reduce((n, e) => n + e.output_tokens, 0);
+
+            const details = document.createElement("details");
+            details.className = "trace";
+            const summary = document.createElement("summary");
+            summary.textContent = `How this was answered: ${modelCalls.length} model call${modelCalls.length === 1 ? "" : "s"}, `
+                + `${toolCalls.length} tool call${toolCalls.length === 1 ? "" : "s"}, `
+                + `${tokensIn.toLocaleString()} tokens in / ${tokensOut.toLocaleString()} out`;
+            details.appendChild(summary);
+
+            const list = document.createElement("ol");
+            for (const e of toolCalls) {
+                const item = document.createElement("li");
+                // A specialist's tool calls sit one level under the orchestrator's
+                if (e.agent !== "orchestrator") item.classList.add("nested");
+                if (e.is_error) item.classList.add("error");
+
+                const agent = document.createElement("span");
+                agent.className = "agent";
+                agent.textContent = e.agent;
+                const call = document.createElement("code");
+                call.textContent = ` ${e.tool}(${JSON.stringify(e.input)})`;
+                item.append(agent, " called", call, ` · ${e.ms.toLocaleString()} ms${e.is_error ? " · failed" : ""}`);
+                item.title = e.result_preview;
+                list.appendChild(item);
+            }
+            if (!toolCalls.length) {
+                const item = document.createElement("li");
+                item.textContent = "The orchestrator answered directly, without delegating.";
+                list.appendChild(item);
+            }
+            details.appendChild(list);
+            return details;
+        }
+
         function fillInput(text) {
             userInput.value = text;
             userInput.focus();
@@ -494,14 +565,19 @@
                 const res = await fetch("/chat", {
                     method: "POST",
                     headers: { "Content-Type": "application/json", "X-Anthropic-Key": apiKey },
-                    body: JSON.stringify({ message: text })
+                    body: JSON.stringify({ message: text, history })
                 });
 
                 const data = await res.json();
                 thinkingRow.remove();
                 // 401 means the key is missing or was rejected, so ask for it again
                 if (res.status === 401) clearKey();
-                addMessage(data.response, "assistant");
+                const bubble = addMessage(data.response, "assistant");
+                if (res.ok) {
+                    history.push({ role: "user", content: text }, { role: "assistant", content: data.response });
+                    const traceEl = renderTrace(data.trace || []);
+                    if (traceEl) bubble.appendChild(traceEl);
+                }
             } catch (err) {
                 thinkingRow.remove();
                 addMessage("Error: could not reach the server.", "thinking");

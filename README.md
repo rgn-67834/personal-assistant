@@ -22,7 +22,14 @@ Backend is FastAPI; the frontend is one static HTML page.
 
 ## How it works
 
-Each agent is a plain tool-use loop on the Claude API, with no agent framework:
+There is no agent framework here. All three agents run the same loop, written
+out in [`agents/loop.py`](agents/loop.py):
+
+1. Send Claude the conversation and a list of tool descriptions.
+2. If Claude answers in text, stop.
+3. If Claude asks for tools, run them, append the results, and repeat.
+
+What differs between agents is only the system prompt and the tools:
 
 - `agents/orchestrator.py` has two tools, `delegate_to_finance` and
   `delegate_to_lawyer`. Claude decides whether to answer or hand off.
@@ -30,6 +37,45 @@ Each agent is a plain tool-use loop on the Claude API, with no agent framework:
   metrics and valuation math.
 - `agents/lawyer.py` gives Claude 6 tools for patent search, details, portfolio
   comparison and CSV export.
+
+```
+you ── orchestrator ──┬── delegate_to_finance ── finance agent ── 21 tools
+                      └── delegate_to_lawyer ─── lawyer agent ─── 6 tools
+```
+
+Under each answer, the page shows the trace: which agent ran, each tool call
+with its input and timing, and the tokens used.
+
+## Design decisions
+
+- **Delegation is tool use.** To the orchestrator, a specialist is one tool
+  that takes a request and returns text. Multi-agent needs no extra machinery.
+- **Specialists get a blank conversation.** Only the orchestrator sees the chat
+  history. Each specialist reads just the request written for it, which keeps
+  its context small and focused, so the orchestrator is prompted to write
+  self-contained requests.
+- **Tool errors go back to Claude.** A tool that raises returns a result marked
+  `is_error` instead of crashing the request, so Claude can retry with
+  different input or explain what went wrong.
+- **The loop always ends.** There is a turn limit, and every stop reason is
+  handled (finished, wants tools, cut off at the length limit, declined).
+- **Parallel tool calls are answered together.** When Claude asks for several
+  tools in one turn, all the results go back in a single message.
+- **The server keeps no state.** The browser holds the chat history and sends
+  the most recent turns with each message, which also suits bring-your-own-key.
+
+## Tests
+
+The loop is tested against a scripted fake of the Claude client, so the tests
+need no API key and cost nothing:
+
+```bash
+pip install pytest
+pytest
+```
+
+They cover the tool round trip, parallel calls, a failing tool, the turn limit,
+truncated and declined answers, delegation, and the chat endpoint.
 
 Built with [Claude Code](https://claude.com/claude-code). It grew out of a
 one-tool calculator agent I wrote first to learn the loop.
