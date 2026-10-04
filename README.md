@@ -10,7 +10,7 @@ message and either answers directly or hands it to a specialist:
 
 Backend is FastAPI; the frontend is one static HTML page.
 
-**Live demo:** <https://personal-assistant-production-68ef.up.railway.app>
+**Live demo:** <https://claude-assistant.up.railway.app>
 (you need your own Anthropic API key, see below)
 
 ## Try asking
