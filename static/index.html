@@ -357,6 +357,27 @@
         .bubble.assistant { white-space: normal; }
         .bubble.assistant table { display: block; overflow-x: auto; white-space: nowrap; }
 
+        /* Headings and code in answers: sized for a chat bubble, not a document */
+        .bubble.assistant h1 { font-size: 1.2rem; }
+        .bubble.assistant h2 { font-size: 1.1rem; }
+        .bubble.assistant h3 { font-size: 1rem; }
+        .bubble.assistant h1:first-child, .bubble.assistant h2:first-child, .bubble.assistant h3:first-child { margin-top: 0; }
+        .bubble.assistant :not(pre) > code {
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 0.85em;
+            background: #f3f4f6;
+            border-radius: 4px;
+            padding: 1px 5px;
+        }
+        .bubble.assistant pre {
+            background: #f3f4f6;
+            border-radius: 8px;
+            padding: 10px 12px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+        }
+
         /* ── Phones ── */
         @media (max-width: 640px) {
             body { height: 100dvh; }
